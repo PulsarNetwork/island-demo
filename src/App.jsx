@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import React, { Suspense, useRef, useEffect, useState } from 'react'
+import React, { Suspense, useRef, useEffect, useState, createRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrthographicCamera, Html, Stats } from "@react-three/drei"
+import { OrthographicCamera, Html, Stats, Points, Point } from "@react-three/drei"
 import { Selection, Select, EffectComposer, Outline } from '@react-three/postprocessing'
 import create from 'zustand'
 import Island from './models/Island'
@@ -16,10 +16,14 @@ const ViewMode = {
 const useStore = create((set) => ({
   // define states
   viewMode: ViewMode.Center,
+  isRaining: false,
 
   // define state-mutating functions
   toggleViewMode: () => set((state) => ({
     viewMode: state.viewMode == ViewMode.Center ? ViewMode.RightSide : ViewMode.Center
+  })),
+  toggleRaining: () => set(state => ({
+    isRaining: !state.isRaining
   }))
 }))
 
@@ -83,6 +87,85 @@ function Sphere(props) {
   )
 }
 
+function RainControl(props) {
+  const ref = useRef()
+  const [hovered, setHovered] = useState(false)
+  useEffect(() => {
+    document.body.style.cursor = hovered ? 'pointer' : 'auto'
+  }, [hovered])
+
+  const toggleRaining = useStore(state => state.toggleRaining)
+  return (
+    <Select enabled={hovered}>
+      <mesh ref={ref} {...props} 
+        onPointerOver={() => setHovered(true)} 
+        onPointerOut={() => setHovered(false)}
+        onClick={() => toggleRaining()} >
+        <sphereGeometry args={[0.6, 16, 16]} />
+        <meshStandardMaterial color="green" />
+        <Html
+          style={{
+            transition: 'all 0.2s',
+            opacity: hovered ? 1 : 0,
+            transform: `scale(${hovered ? 1 : 0})`
+          }}
+          position={[0, 1.5, 0]}
+          transform>
+          <span>Rain</span>
+        </Html>
+      </mesh>
+    </Select>
+  )
+}
+
+function Rain(props) {
+  const ref = useRef()
+  const pointRefs = useRef([])
+  const count = 500
+  const h = 10
+
+  if (pointRefs.current.length !== count) {
+  pointRefs.current = Array(count)
+    .fill()
+    .map((_, i) => pointRefs.current[i] || createRef());
+  }
+
+  const getRandomHeight = () => { return h * (1 + 0.5*Math.random()) }
+
+  useFrame((state) => {
+    pointRefs.current.forEach(r => {
+
+      var p = r.current
+      if (!p.velocity) {
+        p.velocity = -Math.random()
+      }
+      p.velocity -= 0.03 + Math.random() * 0.015
+      p.position.y += p.velocity 
+      if (p.position.y < 0) {
+        p.position.y = getRandomHeight()
+        p.velocity = -Math.random()
+      }
+    })
+  })
+
+  return (
+  <><Points ref={ref}
+    limit={1000} // Optional: max amount of items (for calculating buffer size)
+    range={1000} // Optional: draw-range
+  >
+    <pointsMaterial color={'#cccccc'} size={2.5} transparent={true} />
+    {
+      Array(count).fill().map((_,i) => {
+        var r = Math.random() * 10
+        var theta = Math.random() * 2 * PI
+        return <Point ref={pointRefs.current[i]} position={[r * Math.cos(theta), getRandomHeight(), r * Math.sin(theta)]} />
+      })
+    }
+    
+  </Points>
+  </>)
+}
+
 const DynamicOrthoCamera = (props) => {
   const ref = useRef()
 
@@ -134,13 +217,17 @@ const DynamicScene = (props) => {
     islandRef.current.position.z = THREE.MathUtils.lerp(islandRef.current.position.z, ViewSettings[props.viewMode].posZ, 0.05)
   })
 
+  const isRaining = useStore(state => state.isRaining)
+
   return <group ref={islandRef} position={[islandPosX, islandPosY, islandPosZ]} >
+    {isRaining && <Rain />}
     <Island />
     <Selection>
       <EffectComposer multisampling={8} autoClear={false}>
         <Outline blur visibleEdgeColor="#CDF0E4" edgeStrength={3} width={600} />
       </EffectComposer>
       <Sphere position={[4, 1, 0]}/>
+      <RainControl position={[-4,1,0]} />
     </Selection>
     </group>
 }
@@ -170,7 +257,7 @@ export default function App() {
   return (
     <div ref={container} className='root'>
       <Canvas gl={{ alpha: false }} >
-        <color attach="background" args={['#d0d0d0']} />
+        <color attach="background" args={['#80a0a0']} />
         <fog attach="fog" args={['#d0d0d0', 10, 60]} />
         <ambientLight intensity={0.5} />
         <Suspense fallback={null}>
