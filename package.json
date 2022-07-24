@@ -19,7 +19,8 @@
     "react-three-gui": "^0.4.2",
     "three": "^0.141.0",
     "three-stdlib": "^2.12.1",
-    "typescript": "^4.7.4"
+    "typescript": "^4.7.4",
+    "zustand": "4.0.0-rc.4"
   },
   "scripts": {
     "start": "react-scripts start",

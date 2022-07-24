@@ -1,10 +1,27 @@
 import * as THREE from 'three'
 import React, { Suspense, useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrthographicCamera, Stats } from "@react-three/drei"
+import { OrthographicCamera, Html, Stats } from "@react-three/drei"
+import { Selection, Select, EffectComposer, Outline } from '@react-three/postprocessing'
+import create from 'zustand'
 import Island from './models/Island'
 
+const PI = Math.PI
 
+const ViewMode = {
+  Center: "Center",
+  RightSide: "RightSide"
+}
+
+const useStore = create((set) => ({
+  // define states
+  viewMode: ViewMode.Center,
+
+  // define state-mutating functions
+  toggleViewMode: () => set((state) => ({
+    viewMode: state.viewMode == ViewMode.Center ? ViewMode.RightSide : ViewMode.Center
+  }))
+}))
 
 // function Rig() {
 //   const [vec] = useState(() => new THREE.Vector3())
@@ -13,13 +30,6 @@ import Island from './models/Island'
 //   return <CameraShake maxYaw={0.1} maxPitch={0.1} maxRoll={0.1} yawFrequency={0.5} pitchFrequency={0.5} rollFrequency={0.4} />
 // }
 
-const PI = 3.1415926
-
-
-const ViewMode = {
-  Center: "Center",
-  RightSide: "RightSide"
-}
 
 const ViewSettings = {
   [ViewMode.RightSide]: {
@@ -40,6 +50,38 @@ const ViewSettings = {
   }
 }
 
+function Sphere(props) {
+  const ref = useRef()
+  const [hovered, setHovered] = useState(false)
+  useEffect(() => {
+    document.body.style.cursor = hovered ? 'pointer' : 'auto'
+  }, [hovered])
+  // useFrame((state) => (ref.current.position.x = Math.sin(state.clock.getElapsedTime())))
+
+  const toggleViewMode = useStore(state => state.toggleViewMode)
+  return (
+    <Select enabled={hovered}>
+      <mesh ref={ref} {...props} 
+        onPointerOver={() => setHovered(true)} 
+        onPointerOut={() => setHovered(false)}
+        onClick={() => toggleViewMode()} >
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshStandardMaterial color="orange" />
+
+        <Html
+          style={{
+            transition: 'all 0.2s',
+            opacity: hovered ? 1 : 0,
+            transform: `scale(${hovered ? 1 : 0})`
+          }}
+          position={[0, 1.5, 0]}
+          transform>
+          <span>Home Feed</span>
+        </Html>
+      </mesh>
+    </Select>
+  )
+}
 
 const DynamicOrthoCamera = (props) => {
   const ref = useRef()
@@ -51,13 +93,6 @@ const DynamicOrthoCamera = (props) => {
   const zoom = ViewSettings[ViewMode.Center].zoom
 
   useFrame((state) => {
-    console.log(state.mouse.x, state.mouse.y)
-    // ref.current.rotation.y = THREE.MathUtils.lerp(ref.current.rotation.y, (state.mouse.x * Math.PI) / 30, 0.05)
-    // ref.current.rotation.x = THREE.MathUtils.lerp(ref.current.rotation.x, (state.mouse.y * Math.PI) / 30, 0.05)
-
-    // console.log("zoom", ref.current.zoom)
-    // console.log("cam position", ref.current.position)
-    // console.log("cam theta", ref.current.theta)
     ref.current.zoom = THREE.MathUtils.lerp(ref.current.zoom, ViewSettings[props.viewMode].zoom, 0.03)
     ref.current.theta = THREE.MathUtils.lerp(ref.current.theta, ViewSettings[props.viewMode].theta, 0.05)
 
@@ -94,44 +129,43 @@ const DynamicScene = (props) => {
   const islandPosZ = ViewSettings[ViewMode.Center].posZ
 
   useFrame((state) => {
-    //console.log("island position", islandRef.current.position)
     islandRef.current.position.x = THREE.MathUtils.lerp(islandRef.current.position.x, ViewSettings[props.viewMode].posX, 0.05)
     islandRef.current.position.y = THREE.MathUtils.lerp(islandRef.current.position.y, ViewSettings[props.viewMode].posY, 0.05)
     islandRef.current.position.z = THREE.MathUtils.lerp(islandRef.current.position.z, ViewSettings[props.viewMode].posZ, 0.05)
   })
 
-  return <group ref={islandRef} position={[islandPosX, islandPosY, islandPosZ]} ><Island /></group>
+  return <group ref={islandRef} position={[islandPosX, islandPosY, islandPosZ]} >
+    <Island />
+    <Selection>
+      <EffectComposer multisampling={8} autoClear={false}>
+        <Outline blur visibleEdgeColor="#CDF0E4" edgeStrength={3} width={600} />
+      </EffectComposer>
+      <Sphere position={[4, 1, 0]}/>
+    </Selection>
+    </group>
 }
 
 export default function App() {
   const container = useRef()
-  const [viewMode, setViewMode] = useState(ViewMode.Center)
+  const viewMode = useStore(state => state.viewMode)
+  // const [viewMode, setViewMode] = useState(ViewMode.Center)
   
-  useEffect(() => {
-    const onPointerUp = (e) => {
-      //console.log(e)
-      if (viewMode == ViewMode.Center) {
-        console.log('set rightside view')
-        setViewMode(ViewMode.RightSide)
-      }
-      else if (viewMode == ViewMode.RightSide) {
-        console.log('set center view')
-        setViewMode(ViewMode.Center)
-      }
-    }
-    const onPointerDown = () => {}
-    const onPointerMove = () => {}
+  // useEffect(() => {
+  //   const onPointerUp = (e) => {
+  //   }
+  //   const onPointerDown = () => {}
+  //   const onPointerMove = () => {}
   
-    container.current.addEventListener('pointerup', onPointerUp)
-    container.current.addEventListener('pointerdown', onPointerDown)
-    container.current.addEventListener('pointermove', onPointerMove)
+  //   container.current.addEventListener('pointerup', onPointerUp)
+  //   container.current.addEventListener('pointerdown', onPointerDown)
+  //   container.current.addEventListener('pointermove', onPointerMove)
   
-    return () => {
-      container.current.removeEventListener('pointerup', onPointerUp)
-      container.current.removeEventListener('pointerdown', onPointerDown)
-      container.current.removeEventListener('pointermove', onPointerMove)
-    }
-  }, [viewMode])
+  //   return () => {
+  //     container.current.removeEventListener('pointerup', onPointerUp)
+  //     container.current.removeEventListener('pointerdown', onPointerDown)
+  //     container.current.removeEventListener('pointermove', onPointerMove)
+  //   }
+  // }, [viewMode])
 
   return (
     <div ref={container} className='root'>
@@ -140,9 +174,7 @@ export default function App() {
         <fog attach="fog" args={['#d0d0d0', 10, 60]} />
         <ambientLight intensity={0.5} />
         <Suspense fallback={null}>
-          <DynamicScene 
-            viewMode={viewMode}
-          />
+          <DynamicScene viewMode={viewMode} />
         </Suspense>
         <DynamicOrthoCamera 
           viewMode={viewMode}
